@@ -117,8 +117,6 @@ temp -= temp;               // -24 - (-24) = 0
 * Compile-time math: Inline calculations on compile-time data
 * Function: `jmp` (jump), unconditional jump
 
-### Control flow functions
-
 **Unconditional jump**
 
 Following command will jump to whatever value is in memory field 5
