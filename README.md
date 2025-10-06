@@ -60,16 +60,54 @@ The result is an approach that preserves the **simplicity of the architecture** 
 
 ## Compiler variables
 
-Compile-time variables like this are possible due to the program always seeing 2 (memory address) as its start:
+Compile-time variables like this are possible due to the program always seeing 0 (memory address) as its start:
 
 * `$` = pointer to next instruction as compile-time variable
-* `$t`, `$e` = pointer to a free-to-use zero-cleared temporary memory field as compile-time variable automatically defined at memory address 0 and 1
+* `$t`, `$e` = pointer to a free-to-use zero-cleared temporary memory field as compile-time variable automatically defined at the end of the program image
+* `$r` = pointer to the result of a comparison as compile-time variable automatically defined at the end of the program image
 
 ---
 
 ## Layer 0 abstraction (base, no abstraction)
 
+### **Labels**
+
+A **label** marks a specific **memory location** so you can refer to it by name instead of by its numeric address.
+Labels are often placed before data definitions or instructions and are followed by a colon (`:`).
+
+They make your code **readable**, **modular**, and **easier to reference**, since you can use the label name in place of the actual address when loading or jumping to that part of memory.
+
+---
+
+### **The following assembler directives define or reserve data in memory:**
+
+* `db`, *define byte* (8-bit): reserves and initializes 1 byte per value
+* `dw`, *define word* (16-bit): reserves and initializes 2 bytes per value
+* `dd`, *define double word* (32-bit): reserves and initializes 4 bytes per value
+* `dq`, *define quad word* (64-bit): reserves and initializes 8 bytes per value
+* `resb`, *reserve bytes*: reserves a specified number of bytes **without initialization**
+* `resw`, *reserve words*: reserves a specified number of 16-bit words **without initialization**
+* `resd`, *reserve double words*: reserves a specified number of 32-bit double words **without initialization**
+* `resq`, *reserve quad words*: reserves a specified number of 64-bit quad words **without initialization**
+* `equ`, define a compile-time/constant value, does not use space in memory and can't be modified at runtime
+
+---
+
+### **Example:**
+
+```asm
+msg:   db "Hello", 0      ; label 'msg' points to this string  
+num:   dw 1234            ; 16-bit value  
+ptr:   dd 0x400000        ; 32-bit value  
+val:   dq 69999999        ; 64-bit value  
+hey:   dw 444, 123, 5422  ; multiple 16-bit values  
+buf:   resb 256           ; reserve 256 bytes for a buffer
+fav:   equ 67             ; compile-time/constant value
+```
+
 **The example program:**
+
+(direct, without labels)
 
 ```asm
 subleq 18, 30, $    ; [30] = 0 - (-16) = 16
@@ -81,6 +119,22 @@ subleq $t, $t, $    ; [$t] = -24 - (-24) = 0
 subleq 0, 0, -1     ; halt (out-of-bounds)
 
 db -16, -8          ; define bytes
+```
+
+or with labels:
+
+```asm
+subleq [value_1], [pos], $    ; [30] = 0 - (-16) = 16
+subleq [value_2], [pos], $    ; [30] = 16 - (-8) = 24
+subleq 31, 31, $    `         ; [31] = 0 - 0 = 0
+subleq [pos], $t, $           ; [$t] = 0 - 24 = -24
+subleq $t, 31, $              ; [31] = 0 - (-24) = 24
+subleq $t, $t, $              ; [$t] = -24 - (-24) = 0
+subleq 0, 0, -1               ; halt (out-of-bounds)
+
+value_1: db -16
+value_2: db -8
+pos: equ 30
 ```
 
 **The program shown performs some simple arithmetic, as represented in the C code below**
@@ -112,8 +166,7 @@ temp -= temp;               // -24 - (-24) = 0
 
 * Function: `sub` (subtract), subleq without jump and values (A, B) swapped, which makes it a simple subtract
 * Function: `hlt` (halt), does an out-of-bounds which halts execution
-* Labels: label a point in the program
-* Define (`def`): define a compile-time/constant value
+* Define (`equ`): define a compile-time/constant value
 * Compile-time math: Inline calculations on compile-time data
 * Function: `jmp` (jump), unconditional jump
 
@@ -136,9 +189,10 @@ sub [31], [$t]       ; subleq $t, 31, $
 sub [$t], [$t]       ; subleq $t, $t, $
 hlt                  ; subleq 0, 0, -1
 
+; same as before
 value_1: db -16
 value_2: db -8
-pos: def 30       ; compile-time/constant value
+pos: equ 30
 ```
 
 ---
@@ -149,28 +203,6 @@ pos: def 30       ; compile-time/constant value
 * Function: `add_c` (Compile-time add, superseded by `add`), same as `sub` except it changes the state (positive/negative) of the given virtual literal (cannot be used with runtime data) when placing it in the data section, faster than `add_r` due to compile-time calculations
 * Function: `mov` (Move), copies the content from source to destination
 * Function: `add_r` (Runtime add, superseded by `add`), same as `sub` except it changes the state (positive/negative) of the given value, slower than `add_c` due to runtime calculations
-* Function: `je`, compare two values and jump to the destination if equal
-
-**Jump if equal:**
-
-```asm
-je A, B, C  ; subleq A, $e, $
-            ; subleq $e, $t, $
-            ; subleq B, A, $+3
-            ; subleq $e, $e, $+3
-            ; subleq $t, B, C
-```
-
-Following will jump to memory field 5 if the values (6 and 6) are equal
-
-```asm
-je 6, 6, 5  ; subleq [44], $e, $
-            ; subleq $e, $t, $
-            ; subleq [45], [44], $+3
-            ; subleq $e, $e, $+3
-            ; subleq $t, [45], [46]
-            ; (at position 44) db 6, 6, 5
-```
 
 **Virtual literals example:**
 
